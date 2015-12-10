@@ -1,0 +1,150 @@
+---
+title: "Multiple Regression"
+author: "Tian Zheng"
+date: "October 22, 2015"
+output: html_document
+---
+
+In this document, we will illustrate how to use R to run multiple regression. We will use a data set from the R package `faraway`.
+
+This is a data set on body fat percentage. Traditionally, body fat percentage is measured by the underwater weighing method. 
+![underwater weighing](http://nutritionfirstfitness.com/admin/uploads/hydrostatic%20tank.jpg)
+
+### Exploring the data 
+
+First, we load the data.
+```{r}
+library(faraway)
+# data
+head(fat)
+```
+
+We can examine each skin-fold variable's association with the density based measure using a scatterplot.
+
+```{r, echo=FALSE, fig.height=3}
+plot(siri~neck, data=fat)
+```
+
+We can inspect a matrix of scatterplots.
+```{r}
+pairs(fat[,c(2, 9:18)], cex=0.3)
+```
+
+From this scatterplot matrix, we can see that the strength association between the fat percentage and skin fold thickness at different parts of one's body varies a lot. Certain part is very strongly correlated with fat percentage (such as `hip`) and certain part is not (such as `wrist`).
+
+### Multiple regression
+Now let's consider a multiple regression between the `Siri`'s equation for fat percentation using the body density measured by the underwater weighing method. 
+```{r}
+model1<-lm(siri~biceps+forearm+wrist, data=fat)
+anova(model1)
+```
+
+In the ANOVA table, each row correspond to one extra sum of square. In this example, it is `SSR(biceps)`, `SSR(forearm|biceps)` and `SSR(wrist|biceps, forearm)`. It shows the additional benefit of bringing the next variables in the model.
+
+As you can see from this example, having `bicep`s in this model, measures at `forearm` and `wrist` bring very little. 
+
+Now let's change the order. 
+
+```{r}
+model1<-lm(siri~wrist+forearm+biceps, data=fat)
+anova(model1)
+```
+
+Here you can see first `wrist` is not as informative about the body fat percentage as `biceps` and given it is already in the model, the other two variables can still significantly improve the model fit. 
+
+#### F test of regression coefficients.
+Here we consider two models. Model 1 is `siri~wrist+forearm+biceps` and model 1a is `siri~forearm+biceps`.
+
+```{r}
+model1<-lm(siri~wrist+forearm+biceps, data=fat)
+model1a=lm(siri~forearm+biceps, data=fat)
+anova(model1a, model1)
+```
+
+In the ANOVA table above, `RSS` stands for residual sum of squares, which is actually SSE in our text book. Here we can see that SSE(model 1a) = 13278 with 249 df, SSE(model 1) = 13255 with 248 df. Their difference 23.051 is `SSR(wrist|forearm, biceps)` with 1 df. The F test statistic is $\frac{[SSE(R)-SSE(F)]/[df(R)-df(F)]}{SSE(F)/df(F)}=\frac{23.051}{13255/248}$, following F distribution with df=(1, 248). 
+
+The conclusion of the F test above would be the same as the t test included in the summary of a model fit.
+
+```{r}
+summary(model1)
+```
+
+
+### Multicolinearity
+
+When the X variables are very correlated, we run into the issue of multicollinearity. 
+```{r}
+options(digits=2)
+cor(fat[,c(9:18)])
+```
+
+Now we consider two models. Model 1 is `siri~abdom+chest` and Model 2 is `siri~wrist+chest`. `chest` and `abdom` are very correlated. and `chest` and `wrist` are not highly correlatd. 
+
+```{r}
+model1<-lm(siri~abdom+chest, data=fat)
+model2<-lm(siri~wrist+chest, data=fat)
+```
+
+We can see that the significance of the coefficient for `chest` depend on which variable is in the model already.
+```{r}
+summary(model1)
+summary(model2)
+```
+
+The extra sum of square, measuring the contribution of `chest` in explaining variation in `siri`, is also affected by which variable is in the model aready. 
+```{r}
+anova(model1)
+anova(model2)
+```
+
+#### Multicollinearity extremes
+Here, I will simulate two pairs of variables. `x1` and `x2` will be uncorrelated and `x1` and `x3` will be very correlated. `y` has a multilinear regression relation with `x1, x2, x3`. 
+
+```{r}
+n=20
+x1=rnorm(n, 5, 1)
+x2=rnorm(n, 3, 0.2)
+x2=lm(x2~x1)$residuals # here is to create uncorrelated x2 from x1.
+x3=1+.2*x1+rnorm(n, 0, 0.02)
+y=0.3+2*x1+5*x2+2*x3+rnorm(n, 0, 0.5)
+```
+
+##### First case: uncorrelated variables. 
+First let's look at some models. As you can see the estimation for x1 and x2 in the simple linear models and a joint multiple regression model are exactly the same since they are designed to be uncorrelated. 
+```{r}
+summary(lm(y~x1))
+summary(lm(y~x2))
+summary(lm(y~x1+x2))
+```
+Also we can examine the ANOVA results.
+```{r}
+anova(lm(y~x2+x1))
+anova(lm(y~x1+x2))
+```
+
+You can see that the `SSR(x2)` are the same as `SSR(x2|x1)` and the order of the variables didn't matter in this case. 
+
+##### Second case: very correlated variables. 
+
+Now consider `x1` and `x3`. They are very correalted.
+```{r}
+options(digits=5)
+cor(x1, x3)
+```
+
+As you can see in the outputs below the estimation for x1 and x3 in the simple linear models and a joint multiple regression model are very differet. Especially the standard errors for $b_1$ and $b_2$ in the multiple regression are very big, rendering them insignificant, even though both of them are associated with $Y$. 
+
+This is because when two variables are highly correlated, it is hard to establish their invidual contribution in a multiple regression. This does not mean that including both of them will not improve the prediction. 
+```{r}
+summary(lm(y~x1))
+summary(lm(y~x3))
+summary(lm(y~x1+x3))
+```
+
+Also we can examine the ANOVA results.
+```{r}
+anova(lm(y~x3+x1))
+anova(lm(y~x1+x3))
+```
+
+You can see that the `SSR(x3)` are very different `SSR(x3|x1)` and the order of the variables matters. 

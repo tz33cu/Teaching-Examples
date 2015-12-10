@@ -1,0 +1,158 @@
+---
+title: "Chapter 10 Body Fat Examples"
+author: "Tian Zheng"
+date: "December 1, 2015"
+output: html_document
+---
+Use "bodyfat" dataset as an example to illustrate how to compute diagnostic measurements in R.
+
+### Description of the "bodyfat" dataset:
+- 1st column: Triceps Skinfold Thickness (X1)
+- 2nd column: Thigh Circumference (X2)
+- 3rd column: Midarm Circumference (X3)
+- 4th Column: Body fat Y (X4)
+
+```{r}
+load("bodyfat.RData")
+colnames(bodyfat) <- c("x1","x2","x3","y")
+```
+
+### 10.1 Added-Variable Plots
+Added-variable plots consider the marginal role of a predictor variable $X_k$ given that the other predictors are already in the model. It is related to $SSR(X_k|X_1, ..., X_{k-1}, X_{k+1}, ...,
+    X_{P-1})$ but contains more information.
+
+```{r}
+attach(bodyfat)
+lm1 <- lm(y~x1+x2)
+e1 <- lm(y~x1)$residual
+e2 <- lm(y~x2)$residual
+e12 <- lm(x1~x2)$residual
+e21 <- lm(x2~x1)$residual
+```
+
+### Figure 10.4: Residual Plots and Added Variable Plots
+```{r}
+par(mfrow=c(2,2))
+plot(x1,lm1$residual,xlab="X1",ylab="Residual",
+     main="(a) Residual Plot agianst X1")
+abline(h=0,lty=2)
+plot(e12,e2,xlab="e(X1|X2)",ylab="e(Y|X2)",
+     main="(b) Added-Variable Plot for X1")
+abline(lm(e2~e12-1))
+abline(h=0,lty=2)
+plot(x2,lm1$residual,xlab="X2",ylab="Residual",
+     main="(c) Residual Plot against X2")
+abline(h=0,lty=2)
+plot(e21,e1,xlab="e(X2|X1)",ylab="e(Y|X1)",
+     main="(d) Added-Variable Plot for X2")
+abline(lm(e1~e21-1))
+abline(h=0,lty=2)
+```
+
+### 10.2 Studentized Deleted Residuals
+
+Identifying outlying $Y$ observations using studentized deleted residuals: $t_i=\frac{d_i}{s(d_i)}=\frac{e_i}{\sqrt{MSE_{(i)}(1-h_{ii})}}$
+
+Test for outliers: The studentized deleted
+            outliers $t_i$'s will be compared with $t(1-\alpha/2n;
+            n-p-1)$. It is a family of tests using Bonferroni
+            procedure.
+            
+```{r}
+library(MASS)
+studres(lm1)  #studress gives the studentized deleted residuals
+```
+
+### 10.3 Hat Matrix Leverage Values
+Identifying outlying $X$ observations using Hat Matrix Leverage values. 
+
+Criterion for detecting outlying X observations: A
+    leverage $h_{ii}$ is usually considered to be large if it is
+    more than twice as large as the mean leverage value, denoted by
+    $\bar{h}=\sum{h_{ii}}/n=p/n$, that $h_{ii} > 2p/n$.
+
+#### Figure 10.7: Scatter Plot of Thigh Circiumference against Triceps Skinfold
+
+```{r}
+plot(x1,x2,type="n",xlab="Triceps Skinfold Thickness", 
+     ylab="Thigh Circumference",
+     main="Scatter Plot of X2 against X1 with Case Number Labeled")
+text(x1,x2,1:20)
+```
+
+Here `hatvalues` gives the diagonal values of the hat matrix
+
+```{r}
+hatvalues(lm1)
+```
+
+### 10.4 DFFITS, Cook's Distance and DFBETAS Measures
+
+Here, we consider identifying Influential Cases using  deleted-one-case regressions.
+
+DFFITS measures the influence of a case on the fitted value of itself. For the $i^{th}$ observation, $(DFFITS)_i=\frac{\hat{Y}_i-\hat{Y}_{i(i)}}{\sqrt{MSE_{(i)}h_{ii}}}$.
+
+Criterion:
+    - $|(DFFITS)_i| > 1$ for small to medium data sets $n <
+    30$;
+    - $|(DFFITS)_i| > 2\sqrt{p/n}$ for large data sets.
+
+```{r}
+dffits(lm1)
+```
+
+Cook's distance measures the aggregate influence of a
+    case on the $n$ fitted values. For the $i^{th}$ observation,
+    \$D_i=\frac{\sum{(\hat{Y}_j-\hat{Y}_{j(i)})^2}}{p MSE}$.
+
+    Criterion: If the corresponding percentile values from $F(p,
+    n-p)$ for $D_i$,
+    - approximately $10\% \sim 20\%$ or less, little
+        influence.
+    - $\sim 30-40\%$, some influence.
+    - $ > 50\%$, major influence.
+  
+```{r}
+mycook <- cooks.distance(lm1) 
+mycook
+```
+
+DFBETAS measures the influence of a case on regression coefficients.
+
+Let $c_{kk}$ be the $k^{th}$ diagonal term of $(X^TX)^{-1}$. For the $i^{th}$ observation and the $k^{th}$ coefficient $b_k$,
+$(DFBETAS)_{k(i)}=\frac{b_k-b_{k(i)}}{\sqrt{MSE_{(i)}c_{kk}}}$.
+
+Criterion:
+- $|(DFBETAS)_{k(i)}| > 1$ for small to medium data sets $n <
+    30$;
+- $|(DFBETAS)_{k(i)}| > 2/\sqrt{n}$ for large data sets.
+
+```{r}
+dfbetas(lm1)
+```
+
+### Figure 10.8: Proportional Influence Plot and Index Influence Plot
+
+```{r}
+par(mfrow=c(1,2),pty="s")
+plot(predict(lm1),lm1$residuals,
+     cex=mycook/max(mycook)*4,pch=19,
+     xlab="YHAT",ylab="Residual",
+     main=" (a) Proportional Influcence Plot")
+plot(1:20,mycook,pch=19,cex=0.5,
+     xlab="Case Index Number",ylab="Cook's Distance D", 
+     main=" (b) Index Influence Plot")
+lines(1:20,mycook)
+```
+
+### 10.5 Variance Inflation Factor
+
+```{r}
+lm2 <- lm(y~x1+x2+x3)
+library(car)
+vif(lm2)
+```
+
+```{r}
+detach(bodyfat)
+```

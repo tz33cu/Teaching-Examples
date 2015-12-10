@@ -1,0 +1,5 @@
+xx = c(20, 55, 30)
+yy = c(5, 12, 10)
+plot(xx, yy, pch=16)
+lm(yy~xx)
+abline(lm(yy~xx)$coef)

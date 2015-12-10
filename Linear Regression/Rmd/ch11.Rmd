@@ -1,0 +1,186 @@
+---
+title: "R Examples from Chapter 11 of ALRM (Kutner et al)"
+author: "Tian Zheng"
+date: "December 8, 2015"
+output: html_document
+---
+In this RMarkdown file, we illustrate how to implement some examples from Chapter 11 of ALRM.
+
+```{r}
+load("CH11.RData")
+attach(blood)
+```
+
+### 11.1 weighted least square (blood pressure example)
+
+Weight estimation: 
+
+- fit regular unweighted regression and use residual to estimate variance function or standard deviation function.
+
+- Alternatively, we can use close-by replicates
+
+- Caution: $R^2$ from weighted regression does not have a clear meaning. 
+
+In the following example, we first fit a regular least square regression. Using the absolute residuals from this regression, we fitted a weight function related to age. Using the derived weights, we fit the weighted least square. 
+
+```{r}
+res <- lm(Pressure~Age)$residual
+shat <- predict(lm(abs(res)~Age))
+blood.weighted <- lm(Pressure~Age, weight=1/(shat^2))
+summary(blood.weighted)
+
+par(mfrow=c(1,1))
+plot(Pressure~Age, main="Confidence bands of OLS versus Weight LS")
+legend(20, 110, 
+       c("data", 
+         "OLS fit", "WLS fit", 
+         "OLS Pred. Band", "WLS Pred. Band"),
+       pch=c(1, rep(NA, 4)), 
+       lty=c(NA, 1, 1, 2, 2), 
+       col=c(1, 1, 2, 1, 2),
+       cex=0.6)
+age.plot=seq(min(Age), max(Age), len=50)
+
+## fitted value
+abline(lm(Pressure~Age))
+abline(blood.weighted, col=2)
+
+## confidence band
+blood.lm.fit=predict(lm(Pressure~Age), 
+                     data.frame(Age=age.plot), 
+                     interval="prediction")
+blood.wt=predict(lm(abs(res)~Age), data.frame(Age=age.plot))
+blood.wt=1/(blood.wt^2)
+blood.wtlm.fit=predict(blood.weighted, 
+                       data.frame(Age=age.plot), 
+                       interval="prediction",
+                       weight=blood.wt)
+
+lines(age.plot, blood.lm.fit[,"upr"], 
+      lty=2, lwd=2)
+lines(age.plot, blood.lm.fit[,"lwr"], 
+      lty=2, lwd=2)
+
+lines(age.plot, blood.wtlm.fit[,"upr"], 
+      lty=2, col=2, lwd=2)
+lines(age.plot, blood.wtlm.fit[,"lwr"], 
+      lty=2, col=2, lwd=2)
+
+detach(blood)
+```
+
+We compare the fitted values and predicted bands. We can see that the weights do not affect the fitted value since the linear model is approperiate. The prediction band using the weights captures the variability in the data used better than OLS.
+
+### 11.2 ridge regression (bodyfat example)
+
+Ridge regression: 
+        $$\sum_{i=1}^n (y_i-x_i^T\beta)^2+\lambda \sum_{j=1}^p \beta_j^2$$
+
+We set a sequance of $\lambda$ for ridge regression. 
+
+```{r}
+library(MASS)
+lambda <- c(0,0.002,0.004,0.006,0.008,
+            0.01,0.02,0.03,0.04,
+            0.05,0.1,0.5,1.0)
+#show the coefficients in ridge regression
+bodyfat.ridge <- lm.ridge(y~.,data=bodyfat,lambda=lambda)
+cbind(lambda,t(bodyfat.ridge$coef)) 
+#NOTE:the coefficients are not on the original scale
+```
+
+#### plot the ridge trace
+
+```{r}
+plot(bodyfat.ridge)
+title(main="Ridge trace of estimated standardized regression coefficients")
+abline(h=0)
+legend(0.8,20,col=c(1,2,3),lty=c(1,2,3),legend=c("b1","b2","b3"))
+```
+
+### 11.3 Robust regression (Mathematics Proficiency example)
+
+Robust regression is to provide a better fit to the majority of the observations.
+
+- Least absolute residual (deviations) (LAR/LAD) regression or
+ minimum $L_1$-norm regression. 
+- Estimation is done through linear programming.
+
+#### Example 1 Mathematics Proficiency with one predictor
+
+```{r}
+y <- math$MATHPROF
+x2 <- math$HOMELIB
+x2.c <- x2-mean(x2)
+library(MASS)
+lm.math.huber <- rlm(y~x2.c+I(x2.c^2)) #Robust regression with Huber weight function
+summary(lm.math.huber)
+```
+#### Figure 11.5 Comparison of Lowess, OLS and Robust Quadratic Fits
+
+```{r, fig.width=6, fig.height=10}
+par(mfrow=c(3,2))
+lm.math1 <- lm(y~x2)
+plot(x2,y,pch=19,main="(a) Lowess and Linear Regression Fits")
+
+abline(lm.math1)
+lines(lowess(y~x2),lty=2)
+
+arrows(66,231,65,231,0.1)
+text(67.5,231,"Guam")
+
+arrows(78,231,77,231,0.1)
+text(79.5,231,"D.C.")
+
+arrows(78,218,77,218,0.1)
+text(80.5,218,"V.Islands")
+
+plot(x2,lm.math1$res,pch=19,ylab="Residual",main="(b) Residuals from Linear Regression")
+abline(h=0)
+
+x2.c <- x2-mean(x2)
+lm.math2 <- lm(y~x2.c+I(x2.c^2))
+
+plot(x2,y,pch=19,main="(c) OLS Quadratic Fit")
+lines(cbind(x2,predict(lm.math2))[order(x2),])
+n <- nrow(math)
+
+plot(1:n,cooks.distance(lm.math2),pch=19,cex=0.5,xlab="Index",ylab="Di",main="(d) Cook's Distances-OLS Quadratic Fit")
+lines(1:n,cooks.distance(lm.math2))
+
+arrows(13.5,2.33,11.5,2.33,0.1)
+text(15.5,2.33,"Guam")
+
+arrows(33,0.323,35,0.323,0.1)
+text(30,0.323,"V.Islands")
+
+plot(x2,y,pch=19,main="(e) Robust Quadractic Fit")
+lines(cbind(x2,predict(lm.math.huber))[order(x2),])
+
+plot(1:n,lm.math.huber$w,pch=19,cex=0.5,main="(f) Robust Weights",xlab="Index",ylab="Wi")
+lines(1:n,lm.math.huber$w)
+```
+
+#### Example 2: Mathematics proficiency with five predictors
+
+```{r}
+lm.math.huber2 <- rlm(MATHPROF~HOMELIB+READING+TVWATCH,data=math)
+summary(lm.math.huber2)
+```
+
+### 11.4 Lowess Method (Life Insurance Example)
+
+- Extension from one dimensional case: the distance between observations are defined using multiple predictors instead of one predictor.
+_ Weight function is then defined based on distance. A monotonically decreasing function of distance. 
+- For any given point x, distances are first calculated between  and all observed  and then weights are calculated for each observation. 
+- Weighted least squares is then used to derive a local fit for a local prediction. 
+
+```{r}
+lm.loess <- loess(LifeInsurance~Income+Risk,data=insurance,span=0.5)
+predict(lm.loess,data.frame(Income=30,Risk=3))
+x.new <- list(Income=seq(30,75,length=100),Risk=seq(3,9,length=100))
+pred.loess <- predict(lm.loess,expand.grid(x.new))
+#contour plot
+par(mfrow=c(1,1))
+contour(x.new$Income,x.new$Risk,pred.loess,xlab="X1",ylab="X2",main="Contour Plot")
+```
